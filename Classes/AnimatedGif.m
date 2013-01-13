@@ -72,7 +72,25 @@ static AnimatedGif * instance;
     return instance;
 }
 
-+ (UIImageView *) getAnimationForGifAtUrl:(NSURL *)animationUrl
++ (void)setAnimationForGifAtUrl:(NSURL *)inAnimationURL forView:(UIImageView *)inImageView
+{
+    AnimatedGifQueueObject *agqo = [[AnimatedGifQueueObject alloc] init];
+    [agqo setUiv:inImageView];
+    [agqo setUrl:inAnimationURL];
+    [[AnimatedGif sharedInstance] addToQueue:agqo];
+    [agqo release];
+    
+    if ([[AnimatedGif sharedInstance] busyDecoding] != YES)
+    {
+        [[AnimatedGif sharedInstance] setBusyDecoding: YES];
+        
+        // Asynchronous loading for URL's, else the GUI won't appear until image is loaded.
+        [[AnimatedGif sharedInstance] performSelector:@selector(asynchronousLoading) withObject:nil afterDelay:0.0];
+    }
+    
+}
+
++ (UIImageView *)getAnimationForGifAtUrl:(NSURL *)animationUrl
 {   
     
     AnimatedGifQueueObject *agqo = [[AnimatedGifQueueObject alloc] init];
@@ -100,11 +118,15 @@ static AnimatedGif * instance;
     {
     	NSData *data = [NSData dataWithContentsOfURL: [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url]];
         imageView = [[imageQueue objectAtIndex: 0] uiv];
-    	[self decodeGIF: data];
+    	
+        [self decodeGIF: data];
    	 	UIImageView *tempImageView = [self getAnimation];
-   	 	[imageView setImage: [tempImageView image]];
-    	[imageView sizeToFit];
-    	[imageView setAnimationImages: [tempImageView animationImages]];
+   	 	
+        [imageView setImage:tempImageView.image];
+        [imageView setAnimationImages:tempImageView.animationImages];
+        [imageView setAnimationDuration:tempImageView.animationDuration];
+        [tempImageView release];
+        
     	[imageView startAnimating];
         
         [imageQueue removeObjectAtIndex:0];
@@ -274,7 +296,7 @@ static AnimatedGif * instance;
         {
             // This sets up the frame etc for the UIImageView by using the first frame.
             [imageView setImage:[self getFrameAsImageAtIndex:0]];
-            [imageView sizeToFit];
+            // [imageView sizeToFit];
         }
         else
         {
@@ -520,7 +542,7 @@ static AnimatedGif * instance;
 		bBuffer[4] |= 0x08;
 	}
 	
-    NSMutableData *GIF_string = [NSMutableData dataWithData:[[NSString stringWithString:@"GIF89a"] dataUsingEncoding: NSUTF8StringEncoding]];
+    NSMutableData *GIF_string = [NSMutableData dataWithData:[@"GIF89a" dataUsingEncoding: NSUTF8StringEncoding]];
 	[GIF_screen setData:[NSData dataWithBytes:bBuffer length:blength]];
     [GIF_string appendData: GIF_screen];
     
@@ -592,7 +614,7 @@ static AnimatedGif * instance;
     
 	if ([GIF_pointer length] >= dataPointer + length) // Don't read across the edge of the file..
     {
-		GIF_buffer = [[GIF_pointer subdataWithRange:NSMakeRange(dataPointer, length)] retain];
+		GIF_buffer = [[NSMutableData dataWithData:[GIF_pointer subdataWithRange:NSMakeRange(dataPointer, length)]] retain];
         dataPointer += length;
 		return YES;
 	}

@@ -89,6 +89,7 @@
 @property bool busyDecoding;
 
 - (void) addToQueue: (AnimatedGifQueueObject *) agqo;
++ (void)setAnimationForGifAtUrl:(NSURL *)inAnimationURL forView:(UIImageView *)inImageView;
 + (UIImageView*) getAnimationForGifAtUrl: (NSURL *) animationUrl;
 - (void) decodeGIF:(NSData *)GIF_Data;
 - (void) GIFReadExtensions;
