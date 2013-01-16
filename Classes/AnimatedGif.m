@@ -130,6 +130,8 @@ static AnimatedGif * instance;
     	[imageView startAnimating];
         
         [imageQueue removeObjectAtIndex:0];
+    
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewLoadedAnimatedGIF" object:imageView];
     }
     
     busyDecoding = NO;
