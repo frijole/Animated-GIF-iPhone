@@ -118,17 +118,29 @@ static AnimatedGif * instance;
     {
     	NSData *data = [NSData dataWithContentsOfURL: [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url]];
         imageView = [[imageQueue objectAtIndex: 0] uiv];
-    	
-        [self decodeGIF: data];
-   	 	UIImageView *tempImageView = [self getAnimation];
-   	 	
-        [imageView setImage:tempImageView.image];
-        [imageView setAnimationImages:tempImageView.animationImages];
-        [imageView setAnimationDuration:tempImageView.animationDuration];
-        [tempImageView release];
+
+        NSLog(@"gif size: %u",data.length);
         
-    	[imageView startAnimating];
+    	int tmpMaxSize = 5*pow(2,20); // 5mb
         
+        if ( data.length < tmpMaxSize ) {
+            [self decodeGIF: data];
+            UIImageView *tempImageView = [self getAnimation];
+            
+            if ( tempImageView.animationImages.count> 0 ) {
+                [imageView setImage:tempImageView.image];
+                [imageView setAnimationImages:tempImageView.animationImages];
+                [imageView setAnimationDuration:tempImageView.animationDuration];
+                [tempImageView release];
+                
+                [imageView startAnimating];
+            } else {
+                NSLog(@"only one frame, bailing");
+            }
+        } else {
+            NSLog(@"gif too large, bailing");
+        }
+
         [imageQueue removeObjectAtIndex:0];
     
         [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewLoadedAnimatedGIF" object:imageView];
