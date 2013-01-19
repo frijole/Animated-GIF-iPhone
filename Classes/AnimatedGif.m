@@ -116,10 +116,12 @@ static AnimatedGif * instance;
     // While we have something in queue.
 	while ([imageQueue count] > 0)
     {
-    	NSData *data = [NSData dataWithContentsOfURL: [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url]];
+        NSURL *tmpURL = [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url];
+        NSLog(@"downloading: %@",tmpURL);
+        NSData *data = [NSData dataWithContentsOfURL:tmpURL];
         imageView = [[imageQueue objectAtIndex: 0] uiv];
 
-        NSLog(@"gif size: %u",data.length);
+//        NSLog(@"gif size: %u",data.length);
         
     	int tmpMaxSize = 5*pow(2,20); // 5mb
         
@@ -136,14 +138,22 @@ static AnimatedGif * instance;
                 [imageView startAnimating];
             } else {
                 NSLog(@"only one frame, bailing");
+                [imageView setContentMode:UIViewContentModeCenter];
+                [imageView setImage:[UIImage imageNamed:@"x.png"]];
+                [imageView setAnimationImages:@[[UIImage imageNamed:@"x.png"]]];
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
             }
         } else {
             NSLog(@"gif too large, bailing");
+            [imageView setContentMode:UIViewContentModeCenter];
+            [imageView setImage:[UIImage imageNamed:@"x.png"]];
+            [imageView setAnimationImages:@[[UIImage imageNamed:@"x.png"]]];
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
         }
 
         [imageQueue removeObjectAtIndex:0];
     
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewLoadedAnimatedGIF" object:imageView];
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoaded" object:imageView];
     }
     
     busyDecoding = NO;
@@ -321,9 +331,11 @@ static AnimatedGif * instance;
 		// Add all subframes to the animation
 		NSMutableArray *array = [[NSMutableArray alloc] init];
 		for (int i = 0; i < [GIF_frames count]; i++)
-		{		
-			[array addObject: [self getFrameAsImageAtIndex:i]];
-		}
+		{
+            // check for nil before trying to add to the array
+            id tmpFrame = [self getFrameAsImageAtIndex:i];
+            if ( tmpFrame ) [array addObject: tmpFrame];
+        }
 		
 		NSMutableArray *overlayArray = [[NSMutableArray alloc] init];
 		UIImage *firstImage = [array objectAtIndex:0];
