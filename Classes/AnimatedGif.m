@@ -196,7 +196,7 @@ static AnimatedGif * instance;
                 [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoaded" object:imageView];
             });
         } else {
-            NSLog(@"only one frame, bailing");
+//            NSLog(@"only one frame, bailing");
             // update the view and post the notification on the main thread
             dispatch_async(dispatch_get_main_queue(), ^{
                 [imageView setImage:nil];
@@ -205,7 +205,7 @@ static AnimatedGif * instance;
             });
         }
     } else {
-        NSLog(@"gif too large, bailing");
+//        NSLog(@"gif too large, bailing");
         // update the view and post the notification on the main thread
         dispatch_async(dispatch_get_main_queue(), ^{
             [imageView setImage:nil];
@@ -256,7 +256,7 @@ static AnimatedGif * instance;
                     busyDecoding = NO;
                 });
             } else {
-                NSLog(@"only one frame, bailing");
+//                NSLog(@"only one frame, bailing");
                 // update the view and post the notification on the main thread
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [imageView setImage:nil];
@@ -266,7 +266,7 @@ static AnimatedGif * instance;
                 });
             }
         } else {
-            NSLog(@"gif too large, bailing");
+//            NSLog(@"gif too large, bailing");
             // update the view and post the notification on the main thread
             dispatch_async(dispatch_get_main_queue(), ^{
                 [imageView setImage:nil];
