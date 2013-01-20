@@ -55,10 +55,12 @@
 {
     UIImageView *uiv;
     NSURL *url;
+    NSData *data;
 }
 
 @property (nonatomic, retain) UIImageView *uiv;
 @property (nonatomic, retain) NSURL *url;
+@property (nonatomic, retain) NSData *data;
 
 @end
 
@@ -87,10 +89,13 @@
 
 @property (nonatomic, retain) UIImageView* imageView;
 @property bool busyDecoding;
+@property (retain) dispatch_queue_t dispatchQueue;
 
 - (void) addToQueue: (AnimatedGifQueueObject *) agqo;
 + (void)setAnimationForGifAtUrl:(NSURL *)inAnimationURL forView:(UIImageView *)inImageView;
-+ (UIImageView*) getAnimationForGifAtUrl: (NSURL *) animationUrl;
++ (BOOL)setAnimationForGifWithData:(NSData *)inAnimationData forView:(UIImageView *)inImageView;
++ (UIImageView *)getAnimationForGifAtUrl: (NSURL *) animationUrl;
++ (UIImageView *)getAnimationForGifWithData:(NSData *)animationData;
 - (void) decodeGIF:(NSData *)GIF_Data;
 - (void) GIFReadExtensions;
 - (void) GIFReadDescriptor;

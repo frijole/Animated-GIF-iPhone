@@ -51,6 +51,7 @@
 
 @synthesize uiv;
 @synthesize url;
+@synthesize data;
 
 @end
 
@@ -77,17 +78,33 @@ static AnimatedGif * instance;
     AnimatedGifQueueObject *agqo = [[AnimatedGifQueueObject alloc] init];
     [agqo setUiv:inImageView];
     [agqo setUrl:inAnimationURL];
-    [[AnimatedGif sharedInstance] addToQueue:agqo];
-    [agqo release];
     
-    if ([[AnimatedGif sharedInstance] busyDecoding] != YES)
-    {
-        [[AnimatedGif sharedInstance] setBusyDecoding: YES];
-        
-        // Asynchronous loading for URL's, else the GUI won't appear until image is loaded.
-        [[AnimatedGif sharedInstance] performSelector:@selector(asynchronousLoading) withObject:nil afterDelay:0.0];
-    }
+    // [[AnimatedGif sharedInstance] addToQueue: agqo];
+    // [agqo release];
     
+    // dispatch loading to a backgorund block
+    dispatch_async([[self sharedInstance] gifQueue], ^{
+        [[AnimatedGif sharedInstance] loadQueueObject:agqo];
+    });
+    
+}
+
++ (BOOL)setAnimationForGifWithData:(NSData *)inAnimationData forView:(UIImageView *)inImageView
+{
+    AnimatedGifQueueObject *agqo = [[AnimatedGifQueueObject alloc] init];
+    [agqo setUiv:inImageView];
+    [agqo setData:inAnimationData];
+    
+    // [[AnimatedGif sharedInstance] addToQueue: agqo];
+    // [agqo release];
+    
+    // dispatch loading to a backgorund block
+    dispatch_async([[self sharedInstance] gifQueue], ^{
+        [[AnimatedGif sharedInstance] loadQueueObject:agqo];
+    });
+    
+    // or else...
+    return YES;
 }
 
 + (UIImageView *)getAnimationForGifAtUrl:(NSURL *)animationUrl
@@ -97,66 +114,171 @@ static AnimatedGif * instance;
     [agqo setUiv: [[UIImageView alloc] init]]; // 2x retain, alloc and the property.
     [[agqo uiv] autorelease]; // We expect the user to retain the return object.
     [agqo setUrl: animationUrl]; // this object is only retained by the queueobject, which will be released when loading finishes
-    [[AnimatedGif sharedInstance] addToQueue: agqo];
-    [agqo release];
     
-    if ([[AnimatedGif sharedInstance] busyDecoding] != YES)
-    {
-        [[AnimatedGif sharedInstance] setBusyDecoding: YES];
-        
-        // Asynchronous loading for URL's, else the GUI won't appear until image is loaded.
-        [[AnimatedGif sharedInstance] performSelector:@selector(asynchronousLoading) withObject:nil afterDelay:0.0];
-    }
+    // [[AnimatedGif sharedInstance] addToQueue: agqo];
+    // [agqo release];
+    
+    // dispatch loading to a backgorund block
+    dispatch_async([[self sharedInstance] gifQueue], ^{
+        [[AnimatedGif sharedInstance] loadQueueObject:agqo];
+    });
+
     
     return [agqo uiv];
 }
 
-- (void) asynchronousLoading
++ (UIImageView *)getAnimationForGifWithData:(NSData *)animationData
 {
-    // While we have something in queue.
-	while ([imageQueue count] > 0)
-    {
-        NSURL *tmpURL = [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url];
-        NSLog(@"downloading: %@",tmpURL);
-        NSData *data = [NSData dataWithContentsOfURL:tmpURL];
-        imageView = [[imageQueue objectAtIndex: 0] uiv];
+    
+    __block AnimatedGifQueueObject *agqo = [[AnimatedGifQueueObject alloc] init];
+    [agqo setUiv: [[UIImageView alloc] init]]; // 2x retain, alloc and the property.
+    [[agqo uiv] autorelease]; // We expect the user to retain the return object.
+    [agqo setUrl: nil]; // this object is only retained by the queueobject, which will be released when loading finishes
+    [agqo setData: animationData]; // we're mimicing the URL but with data
+    
+    // [[AnimatedGif sharedInstance] addToQueue: agqo];
+    // [agqo release];
+    
+    // dispatch loading to a backgorund block
+    dispatch_async([[self sharedInstance] gifQueue], ^{
+        [[AnimatedGif sharedInstance] loadQueueObject:agqo];
+    });
 
-//        NSLog(@"gif size: %u",data.length);
+
+    return [agqo uiv];
+}
+
+- (dispatch_queue_t)gifQueue
+{
+    if ( !self.dispatchQueue ) {
+        self.dispatchQueue = dispatch_queue_create("com.animatedgif.parsing.queue", NULL);
+    }
+    
+    return self.dispatchQueue;
+}
+
+- (void)loadQueueObject:(AnimatedGifQueueObject *)queueObject
+{
+//    NSLog(@"loadQueueObject running on %@",dispatch_get_current_queue());
+    
+    NSURL *tmpURL = [queueObject url];
+    NSData *tmpData = [queueObject data];
+    
+    if ( !tmpData && tmpURL ) {
+        // NSLog(@"downloading gif: %@",tmpURL);
+        tmpData = [NSData dataWithContentsOfURL:tmpURL];
+    } else {
+        // NSLog(@"loading gif from data");
+    }
+    
+    imageView = [queueObject uiv];
+    
+    // NSLog(@"gif size: %u",data.length);
+    
+    int tmpMaxSize = 5*pow(2,20); // 5mb
+    
+    if ( tmpData.length < tmpMaxSize ) {
+        [self decodeGIF: tmpData];
+        UIImageView *tempImageView = [self getAnimation];
         
-    	int tmpMaxSize = 5*pow(2,20); // 5mb
-        
-        if ( data.length < tmpMaxSize ) {
-            [self decodeGIF: data];
-            UIImageView *tempImageView = [self getAnimation];
-            
-            if ( tempImageView.animationImages.count> 0 ) {
+        if ( tempImageView.animationImages.count> 0 ) {
+            // update the view and post the notification on the main thread
+            dispatch_async(dispatch_get_main_queue(), ^{
                 [imageView setImage:tempImageView.image];
                 [imageView setAnimationImages:tempImageView.animationImages];
                 [imageView setAnimationDuration:tempImageView.animationDuration];
                 [tempImageView release];
                 
                 [imageView startAnimating];
+                // NSLog(@"gif loading complete.");
+                
+                // post the notification on the main thread
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoaded" object:imageView];
+            });
+        } else {
+            NSLog(@"only one frame, bailing");
+            // update the view and post the notification on the main thread
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [imageView setImage:nil];
+                [imageView setAnimationImages:nil];
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+            });
+        }
+    } else {
+        NSLog(@"gif too large, bailing");
+        // update the view and post the notification on the main thread
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [imageView setImage:nil];
+            [imageView setAnimationImages:nil];
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+        });
+    }
+}
+
+- (void)asynchronousLoading
+{
+    // While we have something in queue.
+	while ([imageQueue count] > 0)
+    {
+        NSURL *tmpURL = [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] url];
+        NSData *tmpData = [(AnimatedGifQueueObject *) [imageQueue objectAtIndex: 0] data];
+
+        if ( !tmpData && tmpURL ) {
+//            NSLog(@"downloading gif: %@",tmpURL);
+            tmpData = [NSData dataWithContentsOfURL:tmpURL];
+        } else {
+//            NSLog(@"loading gif from data");
+        }
+        
+        imageView = [[imageQueue objectAtIndex: 0] uiv];
+
+//        NSLog(@"gif size: %u",data.length);
+        
+    	int tmpMaxSize = 5*pow(2,20); // 5mb
+        
+        if ( tmpData.length < tmpMaxSize ) {
+            [self decodeGIF: tmpData];
+            UIImageView *tempImageView = [self getAnimation];
+            
+            if ( tempImageView.animationImages.count> 0 ) {
+                // update the view and post the notification on the main thread
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [imageView setImage:tempImageView.image];
+                    [imageView setAnimationImages:tempImageView.animationImages];
+                    [imageView setAnimationDuration:tempImageView.animationDuration];
+                    [tempImageView release];
+                    
+                    [imageView startAnimating];
+//                    NSLog(@"gif loading complete.");
+                    
+                    // post the notification on the main thread
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoaded" object:imageView];
+                    busyDecoding = NO;
+                });
             } else {
                 NSLog(@"only one frame, bailing");
-                [imageView setContentMode:UIViewContentModeCenter];
-                [imageView setImage:[UIImage imageNamed:@"x.png"]];
-                [imageView setAnimationImages:@[[UIImage imageNamed:@"x.png"]]];
-                [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+                // update the view and post the notification on the main thread
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [imageView setImage:nil];
+                    [imageView setAnimationImages:nil];
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+                    busyDecoding = NO;
+                });
             }
         } else {
             NSLog(@"gif too large, bailing");
-            [imageView setContentMode:UIViewContentModeCenter];
-            [imageView setImage:[UIImage imageNamed:@"x.png"]];
-            [imageView setAnimationImages:@[[UIImage imageNamed:@"x.png"]]];
-            [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+            // update the view and post the notification on the main thread
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [imageView setImage:nil];
+                [imageView setAnimationImages:nil];
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoadingFailed" object:imageView];
+                busyDecoding = NO;
+            });
         }
 
         [imageQueue removeObjectAtIndex:0];
-    
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"imageViewAnimatedGIFLoaded" object:imageView];
     }
     
-    busyDecoding = NO;
 }
 
 - (void) addToQueue: (AnimatedGifQueueObject *) agqo
@@ -511,9 +633,13 @@ static AnimatedGif * instance;
 		}
 		
 		prev[0] = cur[0];
-        [self GIFGetBytes:1];
-		[GIF_buffer getBytes:cur length:1];
-	}	
+        if ( [self GIFGetBytes:1] ) {
+            [GIF_buffer getBytes:cur length:1];
+        } else {
+            // failed
+            break;
+        }
+	}
 }
 
 - (void) GIFReadDescriptor
@@ -603,23 +729,27 @@ static AnimatedGif * instance;
 	while (true)
     {
 		[self GIFGetBytes:1];
-		[GIF_string appendData: GIF_buffer];
-		
-		unsigned char dBuffer[1];
-		[GIF_buffer getBytes:dBuffer length:1];
-		
-		long u = (long) dBuffer[0];
-        
-		if (u != 0x00)
-        {
-			[self GIFGetBytes:u];
-			[GIF_string appendData: GIF_buffer];
-        }
-        else
-        {
+        if ( GIF_buffer ) { // make sure we have data
+            [GIF_string appendData: GIF_buffer];
+            
+            unsigned char dBuffer[1];
+            [GIF_buffer getBytes:dBuffer length:1];
+            
+            long u = (long) dBuffer[0];
+            
+            if (u != 0x00)
+            {
+                [self GIFGetBytes:u];
+                [GIF_string appendData: GIF_buffer];
+            }
+            else
+            {
+                break;
+            }
+        } else {
+            // no data? bail
             break;
         }
-        
 	}
 	
 	endC = 0x3b;
