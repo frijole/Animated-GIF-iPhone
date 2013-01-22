@@ -80,13 +80,13 @@ static AnimatedGif * instance;
     [agqo setUrl:inAnimationURL];
     
     // [[AnimatedGif sharedInstance] addToQueue: agqo];
-    // [agqo release];
     
     // dispatch loading to a backgorund block
     dispatch_async([[self sharedInstance] gifQueue], ^{
         [[AnimatedGif sharedInstance] loadQueueObject:agqo];
     });
-    
+
+    [agqo release];
 }
 
 + (BOOL)setAnimationForGifWithData:(NSData *)inAnimationData forView:(UIImageView *)inImageView
@@ -102,6 +102,8 @@ static AnimatedGif * instance;
     dispatch_async([[self sharedInstance] gifQueue], ^{
         [[AnimatedGif sharedInstance] loadQueueObject:agqo];
     });
+    
+    [agqo release];
     
     // or else...
     return YES;
@@ -122,8 +124,9 @@ static AnimatedGif * instance;
     dispatch_async([[self sharedInstance] gifQueue], ^{
         [[AnimatedGif sharedInstance] loadQueueObject:agqo];
     });
-
     
+    [agqo release];
+   
     return [agqo uiv];
 }
 
@@ -143,7 +146,8 @@ static AnimatedGif * instance;
     dispatch_async([[self sharedInstance] gifQueue], ^{
         [[AnimatedGif sharedInstance] loadQueueObject:agqo];
     });
-
+    
+    [agqo release];
 
     return [agqo uiv];
 }
@@ -458,7 +462,13 @@ static AnimatedGif * instance;
             id tmpFrame = [self getFrameAsImageAtIndex:i];
             if ( tmpFrame ) [array addObject: tmpFrame];
         }
-		
+        
+        // make sure we actually got some frames. during testing, after hitting errors parsing, we crashed when no frames came out.
+		if ( array.count == 0 ) {
+            // bail out completely.
+            return nil;
+        }
+        
 		NSMutableArray *overlayArray = [[NSMutableArray alloc] init];
 		UIImage *firstImage = [array objectAtIndex:0];
 		CGSize size = firstImage.size;
